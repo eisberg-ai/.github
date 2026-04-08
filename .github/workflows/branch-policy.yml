@@ -1,0 +1,39 @@
+name: branch-policy
+
+on:
+  pull_request:
+    branches: [main, staging]
+
+jobs:
+  branch-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR source branch
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+          REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$BASE" == "main" ]]; then
+            if git ls-remote --exit-code --heads \
+              "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPOSITORY}.git" \
+              staging >/dev/null 2>&1; then
+              if [[ "$HEAD" != "staging" ]]; then
+                echo "::error::PRs to main must come from staging when staging exists, got '$HEAD'"
+                exit 1
+              fi
+            elif [[ "$HEAD" == "main" ]]; then
+              echo "::error::PRs to main must come from a non-main branch"
+              exit 1
+            fi
+          fi
+
+          if [[ "$BASE" == "staging" && ( "$HEAD" == "main" || "$HEAD" == "staging" ) ]]; then
+            echo "::error::PRs to staging must come from feature branches, got '$HEAD'"
+            exit 1
+          fi
+
+          echo "OK: $HEAD -> $BASE"
